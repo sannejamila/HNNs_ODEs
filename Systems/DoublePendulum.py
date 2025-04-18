@@ -33,12 +33,12 @@ class DoublePendulum:
         else:
             x,y,px,py = u[:,0],u[:,1],u[:,2],u[:,3]
         h1 = px*py*np.sin(x-y)/(1+np.sin(x-y)**2)
-        h2 = (px**2+2*py**2-2*px*py*np.cos(x-y))/2/(1+np.sin(x-y)**2)**2
+        h2 = 1/2*(px**2+2*py**2-2*px*py*np.cos(x-y))/(1+np.sin(x-y)**2)**2
 
-        dHdpx = (px-py*np.cos(x-y))/(1+np.sin(x-y)**2)
-        dHdpy = (-px*np.cos(x-y)+2*py)/(1+np.sin(x-y)**2)
         dHdx = 2*np.sin(x)+h1-h2*np.sin(2*(x-y))
         dHdy = np.sin(y)-h1+h2*np.sin(2*(x-y))
+        dHdpx = (px-py*np.cos(x-y))/(1+np.sin(x-y)**2)
+        dHdpy = (-px*np.cos(x-y)+2*py)/(1+np.sin(x-y)**2)
 
         if isinstance(u, np.ndarray):
             dHdu = np.array([dHdx,dHdy ,dHdpx,dHdpy])
