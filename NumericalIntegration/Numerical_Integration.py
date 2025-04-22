@@ -46,6 +46,29 @@ def symplectic_midpoint_time_derivative(u_dot,u_start,dt,u_end = None):
     lhs = u_dot(u_mid)
     return lhs
 
+def explicit_midpoint_time_derivative_withtime(u_dot,u_start,t_start,dt):
+    u_temp = u_start + dt/2*u_dot(u_start,t_start)
+    lhs = u_dot(u_temp, t_start+dt/2)
+    return lhs
+
+def symplectic_midpoint_time_derivative_withtime(u_dot,u_start, t_start, dt,u_end = None):
+    t_end = t_start + dt/2
+    if u_end == None:
+        def g(u):
+            return u-u_start-dt*u_dot(0.5*(u+u_start),t_end)
+        if isinstance(u_start,torch.Tensor):
+            original_shape = u_start.shape
+            u_start = u_start.squeeze(0) 
+            u_end = newton_torch(g,u_start)
+            u_mid = 0.5*(u_start + u_end)
+            return u_dot(u_mid.view(original_shape), t_end)
+        else:
+            u_end = newton(g,u_start, tol = 1e-7, maxiter = 1000)
+    u_mid = 0.5*(u_start + u_end)
+    lhs = u_dot(u_mid, t_end)
+    return lhs
+
+
 def symplectic_euler(u_dot,u_start,dt):
     g = u_dot(u_start)
     f = u_dot(u_start+u_dot(u_start)*dt)
