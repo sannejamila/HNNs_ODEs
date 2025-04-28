@@ -80,9 +80,12 @@ class PortHamiltonianNeuralNetwork(torch.nn.Module):
         assert nstates % 2 == 0, "Number of states must be even (q,p)"
         self.nstates = nstates
         self.npos = nstates // 2
-        self.S = S
+        self.S = torch.tensor(S,dtype=torch.float32)
         self.External_Forces_est = External_Forces_est
         self.Hamiltonian_est = Hamiltonian_est #husk 200 hidden units nå! med 3 hidden layers
+        self.act1 = self.Hamiltonian_est.act_1
+        self.act2 = self.Hamiltonian_est.act_2
+        self.act3 = self.Hamiltonian_est.act_3 #Men da må disse være like
     
         #Damping: N 
         self.N = nn.Parameter(torch.zeros(1, int(self.nstates/2)))
@@ -90,9 +93,31 @@ class PortHamiltonianNeuralNetwork(torch.nn.Module):
   
     def Hamiltonian(self, u):
         return self.Hamiltonian_est(u)
-
+    
+    def time_derivative_step(self, integrator, u_start, dt, u_end=None, *args, **kwargs):
+        if integrator == "RK4":
+            return RK4_time_derivative(self.u_dot, u_start, dt)
+        elif integrator == "midpoint":
+            return explicit_midpoint_time_derivative(self.u_dot, u_start, dt, *args, **kwargs)
+        elif integrator == "symplectic midpoint":
+            return symplectic_midpoint_time_derivative(self.u_dot, u_start, dt, u_end, *args, **kwargs)
+        elif integrator == "symplectic euler":
+            return symplectic_euler(self.u_dot, u_start, dt)
+    """
+    def time_derivative_step(self,integrator,u_start, t_start,dt,u_end = None):
+        if integrator == "RK4":
+            dudt = RK4_time_derivative(self.u_dot,u_start, dt = dt)
+        elif integrator == "midpoint":
+            dudt = explicit_midpoint_time_derivative_withtime(u_dot =self.u_dot,u_start = u_start,t_start = t_start, dt = dt)
+        elif integrator == "symplectic midpoint":
+            dudt = symplectic_midpoint_time_derivative_withtime(u_dot = self.u_dot,u_start = u_start,t_start = t_start, dt = dt, u_end = u_end)
+        elif integrator == "symplectic euler":
+            dudt = symplectic_euler(self.u_dot,u_start,dt = dt)
+        return dudt
+     """
     def dH(self, u):
-        u = u.requires_grad_()
+        #u = u.requires_grad_()
+        u = u.detach().requires_grad_()
         return torch.autograd.grad(
             self.Hamiltonian(u).sum(),
             u,
@@ -106,9 +131,14 @@ class PortHamiltonianNeuralNetwork(torch.nn.Module):
     def External_Force(self,t):
         return self.External_Forces_est(t)
     
-    def u_dot(self,u,t):
+    def u_dot(self,u,t_start):
         #Vet ikke om riktig enda
+        t  = t_start
         u_dot = self.dH(u)@self.S.T
+        #print("u_dot pHNN: ",u_dot)
+        #print("u_dot pHNN shape: ",u_dot.shape)
+        if u_dot.ndim == 1:
+            u_dot = u_dot.unsqueeze(0)
 
         qdot = u_dot[:,:int(self.nstates/2)]
         pdot = u_dot[:,int(self.nstates/2):]
@@ -116,6 +146,59 @@ class PortHamiltonianNeuralNetwork(torch.nn.Module):
         F = self.External_Force(t.reshape(-1, 1))
 
         new_pdot = pdot + self.N*qdot + F
+
         return torch.cat([qdot, new_pdot], 1)
 
 
+    def simulate_trajectory(self,integrator,t_sample,dt,u0=None):
+        if u0 is None:
+            u0 = self.initial_condition_sampler()
+ 
+        u0 = torch.tensor(u0,dtype = torch.float32)
+        u0 = u0.reshape(1,u0.shape[-1])
+
+        t_sample = torch.tensor(t_sample,dtype = torch.float32)
+        #t_shape = t_sample.shape[-1]
+
+        #Initializing solution 
+        u = torch.zeros([t_sample.shape[-1],self.nstates])
+        dudt = torch.zeros_like(u)
+
+        #Setting initial conditions
+        u[0, :] = u0
+
+        #for i in range(t_shape-1):
+        for i, t_step in enumerate(t_sample[:-1]):
+            dt = t_sample[i + 1] - t_step
+            print("u_start = u[i : i + 1, :]: ",u[i : i + 1, :])
+            print("t_start = t_step: ", t_step)
+            print("dt: ", dt)
+            dudt[i,:] = self.time_derivative_step(integrator=integrator,u_start = u[i : i + 1, :],t_start = t_step, dt = dt)
+            print("dudt[i,:]: ", dudt[i,:])
+            u[i+1,:] = u[i,:] + dt*dudt[i,:]
+            print("u[i+1,:]: ", u[i+1,:])
+        return u,dudt,u0
+    
+    def generate_trajectories(self,ntrajectories, t_sample,integrator = "midpoint",u0s=None):
+        if u0s.any() == None:
+            u0s = self.initial_condition_sampler(ntrajectories)
+        
+        #Reshaping
+        u0s = torch.tensor(u0s,dtype = torch.float32)
+        u0s = u0s.reshape(ntrajectories, self.nstates)
+        t_sample = torch.tensor(t_sample,dtype = torch.float32)
+        if len(t_sample.shape) == 1:
+                #Reshaping time
+                t_sample = np.tile(t_sample, (ntrajectories, 1))
+
+        dt = t_sample[0, 1] - t_sample[0, 0]
+        traj_length = t_sample.shape[-1]
+
+        #Initializng u and setting initial conditions
+        u = torch.zeros([ntrajectories, traj_length, self.nstates])
+        u[:,0,:] = u0s
+
+        for i in range(ntrajectories):
+            u[i] = self.simulate_trajectory(integrator = integrator,t_sample = t_sample[i], u0 = u0s[i],dt=dt)[0]
+   
+        return u, t_sample

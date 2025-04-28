@@ -74,7 +74,8 @@ class HamiltonianNeuralNetwork(nn.Module):
             self.initial_condition_sampler = initial_condition_sampler
     
     def _dH_hamiltonian_est(self, u):
-        u = u.requires_grad_()
+        #u = u.requires_grad_()
+        u = u.detach().requires_grad_()
         return torch.autograd.grad(
             self.Hamiltonian(u).sum(),
             u,
@@ -91,6 +92,18 @@ class HamiltonianNeuralNetwork(nn.Module):
     def u_dot(self,u):
         return self.dH(u)@self.S.T
     
+    def time_derivative_step(self, integrator, u_start, dt, u_end=None, *args, **kwargs):
+        if integrator == "RK4":
+            return RK4_time_derivative(self.u_dot, u_start, dt)
+        elif integrator == "midpoint":
+            return explicit_midpoint_time_derivative(self.u_dot, u_start, dt, *args, **kwargs)
+        elif integrator == "symplectic midpoint":
+            return symplectic_midpoint_time_derivative(self.u_dot, u_start, dt, u_end, *args, **kwargs)
+        
+        elif integrator == "symplectic euler":
+            return symplectic_euler(self.u_dot, u_start, dt)
+
+    """
     def time_derivative_step(self,integrator,u_start,dt,u_end = None):
         if integrator == "RK4":
             dudt = RK4_time_derivative(self.u_dot,u_start, dt = dt)
@@ -101,7 +114,7 @@ class HamiltonianNeuralNetwork(nn.Module):
         elif integrator == "symplectic euler":
             dudt = symplectic_euler(self.u_dot,u_start,dt = dt)
         return dudt
-    
+     """
     def simulate_trajectory(self,integrator,t_sample,dt,u0=None):
         if u0 is None:
             u0 = self.initial_condition_sampler()

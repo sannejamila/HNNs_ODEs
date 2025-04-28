@@ -7,6 +7,7 @@ from torch.utils.data import Dataset, DataLoader
 import inspect
 
 
+
 class ODEDataset(Dataset):
     def __init__(self, data):
         self.inputs = data[0]
@@ -23,7 +24,7 @@ class ODEDataset(Dataset):
 
 
 class Training():
-    def __init__(self,model,integrator,train_data,val_data,optimizer,system,batch_size,epochs,shuffle = True, verbose=True,L_coeff=None,num_workers=1):
+    def __init__(self,model,integrator,train_data,val_data,optimizer,system,batch_size,epochs,shuffle = True, verbose=True,L_coeff=None,num_workers=0):
         self.model = model
         self.integrator = integrator
         self.system = system
@@ -63,7 +64,7 @@ class Training():
             dudt = data[1][indices]
             batched[i] = (input_tuple, dudt)
         return batched
-
+    """
     def train_one_epoch(self,model,batched_train_data,loss_func,optimizer):
         computed_loss = 0.0
         optimizer.zero_grad()
@@ -81,17 +82,63 @@ class Training():
             computed_loss += loss.item()
 
         return computed_loss / len(batched_train_data)
+    """
+    def train_one_epoch(self, model, batched_train_data, loss_func, optimizer, penalty_func=None):
+        computed_loss = 0.0
+    
+        for input_tuple, dudt in batched_train_data:
+            optimizer.zero_grad()
+            # Handle 3 or 4 input components (w/ or w/o t_start)
+            if len(input_tuple) == 3:
+                u_start, u_end, dt = input_tuple
+                t_args = ()
+            elif len(input_tuple) == 4:
+                u_start, u_end, t_start, dt = input_tuple
+                #t_args = (t_start,)
+                t_args = (t_start.detach(),)
+                
+            n, m = u_start.shape
+            if n == 1:
+                u_start = u_start.view(-1)
+            dudt = dudt.view(n, m)
+            dudt_est = model.time_derivative_step(self.integrator,u_start,dt,u_end,*t_args)
+            # Optional penalty
+            loss = loss_func(dudt,dudt_est,u_start,self.system,self.L_coeff)
+            if penalty_func is not None:
+                penalty = penalty_func(model, *t_args)
+                loss = loss + penalty 
+ 
+            loss.backward()
+            optimizer.step()
+  
+            computed_loss += loss.detach().item()
 
-    def compute_validation_loss(self,model,valdata_batched, loss_func):
+        return computed_loss / len(batched_train_data)
+
+    def compute_validation_loss(self,model,valdata_batched, loss_func,penalty_func=None):
+        model.eval()
         val_loss = 0
+        
+     
         for i, (input_tuple, dudt) in enumerate(valdata_batched):
-            u_start, u_end, dt = input_tuple
+            if len(input_tuple) == 3:
+                u_start, u_end, dt = input_tuple
+                t_args = ()
+            elif len(input_tuple) == 4:
+                u_start, u_end, t_start, dt = input_tuple
+                t_args = (t_start,)
+
+            #u_start, u_end, dt = input_tuple
             n,m = u_start.shape
             if n ==1:
                 u_start = u_start.view(-1)
             dudt = dudt.view(n,m)
-            dudt_est = model.time_derivative_step(integrator = self.integrator, u_start = u_start,u_end = u_end,dt = dt)
+            with torch.enable_grad():
+                dudt_est = model.time_derivative_step(self.integrator,u_start,dt,u_end, *t_args)
+
             val_loss += loss_func(dudt,dudt_est,u_start,self.system,lam=self.L_coeff).item()
+            if penalty_func is not None:
+                val_loss += penalty_func(model, *t_args)
     
         val_loss = val_loss / len(valdata_batched)
 
@@ -111,7 +158,7 @@ class Training():
                 }, path)
         return "Model saved"
     
-    def train(self,loss_func):
+    def train(self,loss_func, penalty_func=None):
         trainingdetails={}
         optimizer = self.optimizer
         model = self.model
@@ -126,7 +173,7 @@ class Training():
                 train_batch = train_loader
                 self.model.train(True) 
                 start = datetime.datetime.now() 
-                avg_loss = self.train_one_epoch(model,train_batch,loss_func,optimizer)
+                avg_loss = self.train_one_epoch(model,train_batch,loss_func,optimizer,penalty_func)
                 end = datetime.datetime.now() 
                 loss_list.append(avg_loss)
                 self.model.train(False) 
@@ -135,7 +182,7 @@ class Training():
 
                 if self.val_data is not None:
                     start = datetime.datetime.now()
-                    vloss = self.compute_validation_loss(model,val_loader, loss_func)
+                    vloss = self.compute_validation_loss(model,val_loader, loss_func,penalty_func)
                     end = datetime.datetime.now()
                     val_loss_list.append(vloss)
                 trainingdetails["epochs"] = epoch + 1

@@ -18,10 +18,10 @@ class DuffingSystem:
 
     def initial_condition(self):
         #Inspired by https://github.com/shaandesai1/PortHNN/blob/main/duffing_chaos_inference.ipynb
-        u0 =  np.random.rand(2) * 2 - 1
-        radius = np.sqrt(np.random.uniform(0.5, 1.5))  
-        u0 /= np.sqrt((u0 ** 2).sum()) * (radius)
-        #u0 = np.random.rand(2)*0
+        u0 =  np.random.rand(2) * 2 - 1 #uniformly between -1, 1
+        radius = np.sqrt(np.random.uniform(0.5, 1.5))  #r between 0.7071 and 1.2247
+        u0 /= np.sqrt((u0 ** 2).sum()) * (radius) #scaled so u0 in interval [−1.4142,1.4142]
+        #u0 = np.random.rand(2)*0,
         return u0.flatten()
 
     def Hamiltonian(self,u,t):
@@ -33,7 +33,7 @@ class DuffingSystem:
         else:
             q,p = u[:,0],u[:,1]
 
-        H = self.alpha * (q**2)/2 + p**2/2 + self.beta*q**4/4-q*self.gamma*np.sin(self.omega*t)
+        H = self.alpha * (q**2)/2 + p**2/2 + self.beta*q**4/4#-q*self.gamma*np.sin(self.omega*t)
         return H
    
     
@@ -43,25 +43,29 @@ class DuffingSystem:
             q,p = u[0],u[1]
         else:
             q,p = u[:,0],u[:,1]
-        dHdq = self.alpha*q + self.beta*q**3 - self.gamma*np.sin(self.omega*t)
+        dHdq = np.array([self.alpha*q + self.beta*q**3]) #- self.gamma*np.sin(self.omega*t)
 
         dHdp = np.array([p])
 
         if isinstance(u, np.ndarray):
+       
             dHdu = np.array([dHdq,dHdp])
         else: 
             dHdu = torch.tensor([dHdq,dHdp])
         return dHdu
     
 
-    def u_dot(self,u,t):
+    def u_dot(self,u,t_start):
+     
+        t = t_start
         if u.ndim ==1:
             q,p  = u[0],u[1]
         else:
             q,p = u[:,0],u[:,1]
         dH = self.Hamiltonian_grad(u.T,t).T
         dissipation = np.stack([np.zeros_like(p), -self.delta * p], axis=1) 
-        u_dot = dH@self.S.T + dissipation
+        external_force = np.stack([np.zeros_like(p), self.gamma*np.sin(self.omega*t)], axis=1) #changed to sin in stead of cos
+        u_dot = dH@self.S.T + dissipation +external_force
         #u_dot = np.concatenate([p,  q - q ** 3 - self.delta * p + self.gamma * np.cos(self.omega * t)], axis=-1)
         return u_dot
 
@@ -80,9 +84,9 @@ class DuffingSystem:
             dt = t[i+1]-t[i]
         
             if integrator == "midpoint":
-                dudt[i,:] = explicit_midpoint_time_derivative_withtime(self.u_dot,u_start = u[i : i +1, :],t_start = np.array([time_step]), dt = dt)
+                dudt[i,:] = explicit_midpoint_time_derivative(self.u_dot,u_start = u[i : i +1, :],t_start = np.array([time_step]), dt = dt)
             elif integrator == "symplectic midpoint":
-                dudt[i,:] = symplectic_midpoint_time_derivative_withtime(self.u_dot,u_start = u[i : i +1, :],t_start = np.array([time_step]),dt = dt)
+                dudt[i,:] = symplectic_midpoint_time_derivative(self.u_dot,u_start = u[i : i +1, :],t_start = np.array([time_step]),dt = dt)
           
             u[i+1,:] = u[i,:] + dt*dudt[i,:]
 
