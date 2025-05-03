@@ -9,21 +9,22 @@ torch.set_default_dtype(torch.float32)
 #Inspo: https://github.com/shaandesai1/PortHNN/blob/main/models/TDHNN4.py
 
 class BaseHamiltonianNeuralNetwork(nn.Module):
-    def __init__(self, nstates,noutputs = 1,hidden_dim=200, act_1 = Sin(), act_2 = Sin(), act_3 =nn.Softplus()):
+    def __init__(self, nstates,noutputs = 1,hidden_dim=100, act_1 = Sin(), act_2 = Sin()):#, act_3 =nn.Softplus()):
         super().__init__()
         self.nstates = nstates
         self.noutputs = 1
         self.hidden_dim = hidden_dim
         self.act_1 = act_1
         self.act_2 = act_2
-        self.act_3 = act_3
+        #self.act_3 = act_3
 
         linear1 = nn.Linear(nstates, hidden_dim) 
         linear2 = nn.Linear(hidden_dim, hidden_dim)
-        linear3 = nn.Linear(hidden_dim, hidden_dim)
-        linear4 = nn.Linear(hidden_dim, noutputs)
+        linear3 = nn.Linear(hidden_dim, noutputs)
+        #linear3 = nn.Linear(hidden_dim, hidden_dim)
+        #linear4 = nn.Linear(hidden_dim, noutputs)
 
-        for lin in [linear1, linear2, linear3,linear4]:
+        for lin in [linear1, linear2, linear3]:#,linear4]:
             nn.init.orthogonal_(lin.weight) 
 
         self.model = nn.Sequential(
@@ -32,8 +33,8 @@ class BaseHamiltonianNeuralNetwork(nn.Module):
             linear2,
             self.act_2,
             linear3,
-            self.act_3,
-            linear4,
+            #self.act_3,
+            #linear4,
         )
 
     def forward(self,u=None):
@@ -42,19 +43,23 @@ class BaseHamiltonianNeuralNetwork(nn.Module):
 
 
 class ExternalForceNeuralNetwork(nn.Module):
-    def __init__(self, nstates,hidden_dim=200, act_1 = Sin(), act_2 = Sin(), act_3 =Sin()):
+    def __init__(self, nstates,hidden_dim=100, act_1 = Sin(), act_2 = Sin()):#, act_3 =Sin()):
         super().__init__()
         self.nstates = nstates
         self.noutputs = 1
         self.hidden_dim = hidden_dim
         self.act_1 = act_1
         self.act_2 = act_2
-        self.act_3 = act_3
+        #self.act_3 = act_3
+        self.Fourier = False
+        self.fourier_to_scalar = nn.Linear(2, 1)
+        self.learned_period = None
 
         linear1= nn.Linear(1, hidden_dim)
         linear2 = nn.Linear(hidden_dim, hidden_dim)
-        linear3 = nn.Linear(hidden_dim, hidden_dim)
-        linear4= nn.Linear(hidden_dim, int(self.nstates/2), bias=False)
+        linear3= nn.Linear(hidden_dim, int(self.nstates/2), bias=False)
+        #linear3 = nn.Linear(hidden_dim, hidden_dim)
+        #linear4= nn.Linear(hidden_dim, int(self.nstates/2), bias=False)
 
         #for lin in [linear1, linear2, linear3]:
             #nn.init.orthogonal_(lin.weight) 
@@ -65,12 +70,23 @@ class ExternalForceNeuralNetwork(nn.Module):
             linear2,
             self.act_2,
             linear3,
-            self.act_3,
-            linear4
+            #self.act_3,
+            #linear4
         )
+   
 
     def forward(self,t=None):
-        return self.model(t)
+        if self.Fourier:
+            if t.ndim == 1: 
+                t = t.unsqueeze(-1) 
+            fourier_basis = torch.cat([
+                    torch.sin(2 * torch.pi * t / self.learned_period),
+                    torch.cos(2 * torch.pi * t / self.learned_period),
+                ], dim=-1)
+            t_scalar = self.fourier_to_scalar(fourier_basis) #Preprocess Fourier features back to scalar
+            return self.model(t_scalar) 
+        else:
+            return self.model(t)
     
   
 
@@ -85,7 +101,7 @@ class PortHamiltonianNeuralNetwork(torch.nn.Module):
         self.Hamiltonian_est = Hamiltonian_est #husk 200 hidden units nå! med 3 hidden layers
         self.act1 = self.Hamiltonian_est.act_1
         self.act2 = self.Hamiltonian_est.act_2
-        self.act3 = self.Hamiltonian_est.act_3 #Men da må disse være like
+       # self.act3 = self.Hamiltonian_est.act_3 #Men da må disse være like
     
         #Damping: N 
         self.N = nn.Parameter(torch.zeros(1, int(self.nstates/2)))
@@ -135,8 +151,6 @@ class PortHamiltonianNeuralNetwork(torch.nn.Module):
         #Vet ikke om riktig enda
         t  = t_start
         u_dot = self.dH(u)@self.S.T
-        #print("u_dot pHNN: ",u_dot)
-        #print("u_dot pHNN shape: ",u_dot.shape)
         if u_dot.ndim == 1:
             u_dot = u_dot.unsqueeze(0)
 
@@ -144,8 +158,11 @@ class PortHamiltonianNeuralNetwork(torch.nn.Module):
         pdot = u_dot[:,int(self.nstates/2):]
 
         F = self.External_Force(t.reshape(-1, 1))
+        damping_term = (self.N @ qdot.T).T 
 
-        new_pdot = pdot + self.N*qdot + F
+        new_pdot = pdot + damping_term + F
+
+        #new_pdot = pdot + self.N*qdot + F
 
         return torch.cat([qdot, new_pdot], 1)
 
@@ -170,13 +187,13 @@ class PortHamiltonianNeuralNetwork(torch.nn.Module):
         #for i in range(t_shape-1):
         for i, t_step in enumerate(t_sample[:-1]):
             dt = t_sample[i + 1] - t_step
-            print("u_start = u[i : i + 1, :]: ",u[i : i + 1, :])
-            print("t_start = t_step: ", t_step)
-            print("dt: ", dt)
+            #print("u_start = u[i : i + 1, :]: ",u[i : i + 1, :])
+            #print("t_start = t_step: ", t_step)
+            #print("dt: ", dt)
             dudt[i,:] = self.time_derivative_step(integrator=integrator,u_start = u[i : i + 1, :],t_start = t_step, dt = dt)
-            print("dudt[i,:]: ", dudt[i,:])
+            #print("dudt[i,:]: ", dudt[i,:])
             u[i+1,:] = u[i,:] + dt*dudt[i,:]
-            print("u[i+1,:]: ", u[i+1,:])
+            #print("u[i+1,:]: ", u[i+1,:])
         return u,dudt,u0
     
     def generate_trajectories(self,ntrajectories, t_sample,integrator = "midpoint",u0s=None):

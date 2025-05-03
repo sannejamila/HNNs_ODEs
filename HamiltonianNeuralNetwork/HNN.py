@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from NumericalIntegration.Numerical_Integration import *
-
+mps_device = torch.device("mps")
 torch.set_default_dtype(torch.float32)
 
 class Sin(nn.Module):
@@ -90,6 +90,7 @@ class HamiltonianNeuralNetwork(nn.Module):
         )[0].detach()
     
     def u_dot(self,u):
+        #S = (self.S).to(device=mps_device)
         return self.dH(u)@self.S.T
     
     def time_derivative_step(self, integrator, u_start, dt, u_end=None, *args, **kwargs):

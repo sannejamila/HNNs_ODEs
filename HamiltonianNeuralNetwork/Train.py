@@ -5,7 +5,9 @@ from tqdm import trange
 import datetime
 from torch.utils.data import Dataset, DataLoader
 import inspect
-
+#torch.set_default_device("mps")
+#mps_device = torch.device("mps")
+#mps_device = torch.device("mps")
 
 
 class ODEDataset(Dataset):
@@ -24,7 +26,7 @@ class ODEDataset(Dataset):
 
 
 class Training():
-    def __init__(self,model,integrator,train_data,val_data,optimizer,system,batch_size,epochs,shuffle = True, verbose=True,L_coeff=None,num_workers=0):
+    def __init__(self,model,integrator,train_data,val_data,optimizer,system,batch_size,epochs,shuffle = True, verbose=True,L_coeff=None,num_workers=2):
         self.model = model
         self.integrator = integrator
         self.system = system
@@ -91,16 +93,18 @@ class Training():
             # Handle 3 or 4 input components (w/ or w/o t_start)
             if len(input_tuple) == 3:
                 u_start, u_end, dt = input_tuple
+                #u_start, u_end, dt = u_start.to(mps_device), u_end.to(mps_device), dt.to(mps_device) 
                 t_args = ()
             elif len(input_tuple) == 4:
                 u_start, u_end, t_start, dt = input_tuple
+                #u_start, u_end, t_start, dt = u_start.to(mps_device), u_end.to(mps_device), t_start.to(mps_device), dt.to(mps_device) 
                 #t_args = (t_start,)
                 t_args = (t_start.detach(),)
                 
             n, m = u_start.shape
             if n == 1:
                 u_start = u_start.view(-1)
-            dudt = dudt.view(n, m)
+            dudt = dudt.view(n, m)#.to(mps_device)
             dudt_est = model.time_derivative_step(self.integrator,u_start,dt,u_end,*t_args)
             # Optional penalty
             loss = loss_func(dudt,dudt_est,u_start,self.system,self.L_coeff)
@@ -123,16 +127,18 @@ class Training():
         for i, (input_tuple, dudt) in enumerate(valdata_batched):
             if len(input_tuple) == 3:
                 u_start, u_end, dt = input_tuple
+                #u_start, u_end, dt = u_start.to(mps_device), u_end.to(mps_device), dt.to(mps_device) 
                 t_args = ()
             elif len(input_tuple) == 4:
                 u_start, u_end, t_start, dt = input_tuple
+                #u_start, u_end, t_start, dt = u_start.to(mps_device), u_end.to(mps_device), t_start.to(mps_device), dt.to(mps_device) 
                 t_args = (t_start,)
 
             #u_start, u_end, dt = input_tuple
             n,m = u_start.shape
             if n ==1:
                 u_start = u_start.view(-1)
-            dudt = dudt.view(n,m)
+            dudt = dudt.view(n,m)#.to(mps_device) 
             with torch.enable_grad():
                 dudt_est = model.time_derivative_step(self.integrator,u_start,dt,u_end, *t_args)
 
