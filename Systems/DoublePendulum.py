@@ -149,7 +149,16 @@ class DoublePendulumExternalForce:
         return dHdu
     
     
-        
+    def External_force(self, t):
+        F_x = 0.5 * np.cos(0.7 * np.pi * t)
+        F_y = 0.2 * np.sin(1.3 * np.pi * t)
+        if isinstance(t, np.ndarray):
+            F = np.stack([F_x, F_y], axis=-1)
+        else:
+            F = torch.stack([F_x, F_y], dim=-1)
+        return F  # shape: [batch_size, 2] or [2] if scalar
+
+  
     
     def initial_condition(self,H0=None):
         min_norm=0.3
@@ -179,7 +188,7 @@ class DoublePendulumExternalForce:
         dissipation = np.zeros_like(u)
    
         
-        if dH.ndim ==1:
+        if dH.ndim == 1:
             dissipation[:,2] = - 0.1* dH[2]
             dissipation[:,3] = -0.05 * dH[3]
         else:
@@ -187,15 +196,33 @@ class DoublePendulumExternalForce:
             dissipation[:,3] = -0.05 * dH[:,3]
 
 
-
         external_force = np.zeros_like(u)
-        external_force[:,2] = 0.5 * np.cos(2 * np.pi * t)
-        external_force[:,3] =  0.2 * np.sin(2 * np.pi * t)
+        #external_force[:,2] = 0.5 * np.cos(0.7 * np.pi * t)
+        #external_force[:,3] =  0.2 * np.sin(1.3 * np.pi * t)
+
+
+
+        F = self.External_force(t)
+
+        if F.ndim == 1:
+            F = F.reshape(1, 2)  # make it [1, 2] for broadcasting
+
+        external_force[:, 2:] = F  # apply external force to px and py
+
 
         u_dot = dH@self.S.T + dissipation +external_force
         return u_dot
 
-
+    def get_dissipation(self,u):
+        dH = self.Hamiltonian_grad(u.T).T
+        dissipation = np.zeros_like(u)
+        if dH.ndim ==1:
+            dissipation[2] = - 0.1* dH[2]
+            dissipation[3] = -0.05 * dH[3]
+        else:
+            dissipation[:,2] = - 0.1* dH[:,2]
+            dissipation[:,3] = -0.05 * dH[:,3]
+        return dissipation
 
 
 

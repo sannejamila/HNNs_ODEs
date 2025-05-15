@@ -53,6 +53,9 @@ class ExternalForceNeuralNetwork(nn.Module):
         #self.act_3 = act_3
         self.Fourier = False
         self.fourier_to_scalar = nn.Linear(2, 1)
+        #Initializing weigths and bias
+        nn.init.xavier_uniform_(self.fourier_to_scalar.weight)
+        nn.init.zeros_(self.fourier_to_scalar.bias)
         self.learned_period = None
 
         linear1= nn.Linear(1, hidden_dim)
