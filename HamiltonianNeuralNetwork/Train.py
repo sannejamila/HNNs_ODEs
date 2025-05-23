@@ -24,7 +24,6 @@ class ODEDataset(Dataset):
         return x, y
 
 
-
 class Training():
     def __init__(self,model,integrator,train_data,val_data,optimizer,system,batch_size,epochs,shuffle = True, verbose=True,L_coeff=None,num_workers=0):
         self.model = model
@@ -66,31 +65,13 @@ class Training():
             dudt = data[1][indices]
             batched[i] = (input_tuple, dudt)
         return batched
-    """
-    def train_one_epoch(self,model,batched_train_data,loss_func,optimizer):
-        computed_loss = 0.0
-        optimizer.zero_grad()
-        for i, (input_tuple, dudt) in enumerate(batched_train_data):
-            u_start, u_end, dt= input_tuple
-            n,m = u_start.shape
-            if n ==1:
-                u_start = u_start.view(-1)
-            dudt = dudt.view(n,m)
-            dudt_est = model.time_derivative_step(integrator = self.integrator, u_start = u_start,u_end = u_end,dt = dt)
-            loss = loss_func(dudt,dudt_est,u_start,self.system,self.L_coeff)
-            loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
-            computed_loss += loss.item()
 
-        return computed_loss / len(batched_train_data)
-    """
     def train_one_epoch(self, model, batched_train_data, loss_func, optimizer, penalty_func=None):
         computed_loss = 0.0
     
         for input_tuple, dudt in batched_train_data:
             optimizer.zero_grad()
-            # Handle 3 or 4 input components (w/ or w/o t_start)
+    
             if len(input_tuple) == 3:
                 u_start, u_end, dt = input_tuple
                 #u_start, u_end, dt = u_start.to(mps_device), u_end.to(mps_device), dt.to(mps_device) 
@@ -106,7 +87,6 @@ class Training():
                 u_start = u_start.view(-1)
             dudt = dudt.view(n, m)#.to(mps_device)
             dudt_est = model.time_derivative_step(self.integrator,u_start,dt,u_end,*t_args)
-            # Optional penalty
             loss = loss_func(dudt,dudt_est,u_start,self.system,self.L_coeff)
             if penalty_func is not None:
                 penalty = penalty_func(model, *t_args)

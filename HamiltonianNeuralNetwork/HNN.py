@@ -104,18 +104,6 @@ class HamiltonianNeuralNetwork(nn.Module):
         elif integrator == "symplectic euler":
             return symplectic_euler(self.u_dot, u_start, dt)
 
-    """
-    def time_derivative_step(self,integrator,u_start,dt,u_end = None):
-        if integrator == "RK4":
-            dudt = RK4_time_derivative(self.u_dot,u_start, dt = dt)
-        elif integrator == "midpoint":
-            dudt = explicit_midpoint_time_derivative(self.u_dot,u_start, dt = dt)
-        elif integrator == "symplectic midpoint":
-            dudt = symplectic_midpoint_time_derivative(self.u_dot,u_start, dt = dt, u_end = u_end)
-        elif integrator == "symplectic euler":
-            dudt = symplectic_euler(self.u_dot,u_start,dt = dt)
-        return dudt
-     """
     def simulate_trajectory(self,integrator,t_sample,dt,u0=None):
         if u0 is None:
             u0 = self.initial_condition_sampler()
@@ -147,6 +135,7 @@ class HamiltonianNeuralNetwork(nn.Module):
         u0s = torch.tensor(u0s,dtype = torch.float32)
         u0s = u0s.reshape(ntrajectories, self.nstates)
         t_sample = torch.tensor(t_sample,dtype = torch.float32)
+        
         if len(t_sample.shape) == 1:
                 #Reshaping time
                 t_sample = np.tile(t_sample, (ntrajectories, 1))
