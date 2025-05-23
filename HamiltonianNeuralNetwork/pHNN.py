@@ -151,21 +151,21 @@ class PortHamiltonianNeuralNetwork(torch.nn.Module):
         return self.External_Forces_est(t)
     
     def u_dot(self,u,t_start):
-        #Vet ikke om riktig enda
         t  = t_start
         u_dot = self.dH(u)@self.S.T
         if u_dot.ndim == 1:
             u_dot = u_dot.unsqueeze(0)
 
+        #qdot = dH/dp
+        #pdot = -dH/dq
         qdot = u_dot[:,:int(self.nstates/2)]
         pdot = u_dot[:,int(self.nstates/2):]
 
         F = self.External_Force(t.reshape(-1, 1))
         damping_term = (self.N @ qdot.T).T 
 
+         #pdot = -dH/dq+N*dH/dp+F
         new_pdot = pdot + damping_term + F
-
-        #new_pdot = pdot + self.N*qdot + F
 
         return torch.cat([qdot, new_pdot], 1)
 

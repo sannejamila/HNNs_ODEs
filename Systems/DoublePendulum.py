@@ -75,7 +75,7 @@ class DoublePendulum:
         return u_dot
 
     
-    def sample_trajectory(self,t,u0= None,H0 = None, integrator = "RK4"):
+    def sample_trajectory(self,t,u0= None,H0 = None, integrator = "symplectic midpoint"):
         if u0 is None:
             u0 = self.initial_condition(H0)
 
@@ -100,8 +100,94 @@ class DoublePendulum:
             u[i+1,:] = u[i,:] + dt*dudt[i,:]
 
         return u, dudt, t, u0
-   
 
+class DoublePendulumExternalForce(DoublePendulum):
+    def __init__(self, seed=123):
+        super().__init__(seed=seed)  
+        self.name_system = "DoublePendulumExternalForce"
+
+    
+    def External_force(self, t):
+        F_x = 0.5 * np.cos(0.7 * np.pi * t)
+        F_y = 0.2 * np.sin(1.3 * np.pi * t)
+        if isinstance(t, np.ndarray):
+            F = np.stack([F_x, F_y], axis=-1)
+        else:
+            F = torch.stack([F_x, F_y], dim=-1)
+        return F  # shape: [batch_size, 2] or [2] if scalar
+
+    def u_dot(self,u,t_start):
+        t = t_start
+        dH = self.Hamiltonian_grad(u.T).T
+        #print("shape dh in udot: ",dH.shape)
+        #dissipation = np.zeros_like(u)
+   
+        
+        #if dH.ndim == 1:
+            #dissipation[:,2] = - 0.1* dH[2]
+           # dissipation[:,3] = -0.05 * dH[3]
+       # else:
+          #  dissipation[:,2] = - 0.1* dH[:,2]
+          #  dissipation[:,3] = -0.05 * dH[:,3]
+
+
+        external_force = np.zeros_like(u)
+        #external_force[:,2] = 0.5 * np.cos(0.7 * np.pi * t)
+        #external_force[:,3] =  0.2 * np.sin(1.3 * np.pi * t)
+
+        dissipation = self.get_dissipation(u=u,dH=dH)
+
+        F = self.External_force(t)
+
+        if F.ndim == 1:
+            F = F.reshape(1, 2)  # make it [1, 2] for broadcasting
+
+        external_force[:, 2:] = F  # apply external force to px and py
+
+
+        u_dot = dH@self.S.T + dissipation +external_force
+        return u_dot
+
+
+    def get_dissipation(self,u,dH=None):
+        if dH is None:
+            dH = self.Hamiltonian_grad(u.T).T
+        dissipation = np.zeros_like(u)
+        if dH.ndim ==1:
+            #print("shape dh in diss: ",dH.shape)
+            dissipation[:,2] = - 0.1* dH[2]
+            dissipation[:,3] = -0.05 * dH[3]
+        else:
+            dissipation[:,2] = - 0.1* dH[:,2]
+            dissipation[:,3] = -0.05 * dH[:,3]
+        return dissipation
+
+
+
+    def sample_trajectory(self,t,u0=None, integrator =  "symplectic midpoint"):
+        if u0 is None:
+            u0 = self.initial_condition() #not implemented yet
+
+        #Initializing solution and its derivative
+        u = np.zeros([t.shape[0],self.nstates])
+        dudt = np.zeros_like(u)
+        
+        #Setting initial conditions
+        u[0, :] = u0
+
+        for i, time_step in enumerate(t[:-1]):
+            dt = t[i+1]-t[i]
+        
+            if integrator == "midpoint":
+                dudt[i,:] = explicit_midpoint_time_derivative(self.u_dot,u_start = u[i : i +1, :],t_start = np.array([time_step]), dt = dt)
+            elif integrator == "symplectic midpoint":
+                dudt[i,:] = symplectic_midpoint_time_derivative(self.u_dot,u_start = u[i : i +1, :],t_start = np.array([time_step]),dt = dt)
+          
+            u[i+1,:] = u[i,:] + dt*dudt[i,:]
+
+        return u, dudt, t, u0
+
+"""
 
 
 
@@ -248,3 +334,4 @@ class DoublePendulumExternalForce:
             u[i+1,:] = u[i,:] + dt*dudt[i,:]
 
         return u, dudt, t, u0
+"""

@@ -26,7 +26,7 @@ class ODEDataset(Dataset):
 
 
 class Training():
-    def __init__(self,model,integrator,train_data,val_data,optimizer,system,batch_size,epochs,shuffle = True, verbose=True,L_coeff=None,num_workers=2):
+    def __init__(self,model,integrator,train_data,val_data,optimizer,system,batch_size,epochs,shuffle = True, verbose=True,L_coeff=None,num_workers=0):
         self.model = model
         self.integrator = integrator
         self.system = system
