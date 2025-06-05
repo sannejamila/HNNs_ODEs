@@ -22,7 +22,7 @@ def get_optimal_period(F_model, candidates, t_vals):
     errors = torch.tensor(errors)
     return candidates[errors.argmin()], errors
 
-def Retrain_with_Forier_Basis(model,candidates, integrator, train_data,t_vals, val_data,sys,lr, batch_size,epochs,loss_func,penalty_func):
+def Retrain_with_Forier_Basis(model,candidates, integrator, train_data,t_vals, val_data,sys,lr, batch_size,epochs,loss_func,penalty_func,schedule = True):
 
     Hamiltonian_est = model.Hamiltonian_est
     External_Forces_est = model.External_Forces_est
@@ -40,7 +40,9 @@ def Retrain_with_Forier_Basis(model,candidates, integrator, train_data,t_vals, v
         External_Forces_est=External_Forces_est
     )
     #optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model_fourier.parameters()), lr=lr)
-    optimizer = torch.optim.Adam(model_fourier.parameters(), lr=lr)
+    optimizer = torch.optim.AdamW(model_fourier.parameters(), lr=lr)
+    if schedule:
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.5, patience=5)
 
     trainer = Training(
         model=model_fourier,
@@ -53,6 +55,6 @@ def Retrain_with_Forier_Basis(model,candidates, integrator, train_data,t_vals, v
         epochs=epochs
     )
 
-    model_fourier, training_details = trainer.train(loss_func=loss_func, penalty_func=penalty_func)
+    model_fourier, training_details = trainer.train(loss_func=loss_func, penalty_func=penalty_func,scheduler=scheduler)
 
     return model_fourier, training_details

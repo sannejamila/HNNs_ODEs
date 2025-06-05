@@ -113,7 +113,15 @@ class HenonHeilesExternalForce(HenonHeilesSystem):
         t = t_start
         dH = self.Hamiltonian_grad(u.T).T
         external_force = np.zeros_like(u)
-        dissipation = self.get_dissipation(u=u,dH=dH)
+        #dissipation = self.get_dissipation(u=u,dH=dH)
+        dissipation = np.zeros_like(u)
+        if dH.ndim ==1:
+            dissipation[:,2] = - 0.2* dH[2]
+            dissipation[:,3] = -0.07 * dH[3]
+        else:
+            dissipation[:,2] = - 0.2* dH[:,2]
+            dissipation[:,3] = -0.07 * dH[:,3]
+
         F = self.External_force(t)
         if F.ndim == 1:
             F = F.reshape(1, 2) 
@@ -122,18 +130,8 @@ class HenonHeilesExternalForce(HenonHeilesSystem):
         return u_dot
 
 
-    def get_dissipation(self,u,dH=None):
-        if dH is None:
-            dH = self.Hamiltonian_grad(u.T).T
-        dissipation = np.zeros_like(u)
-        if dH.ndim ==1:
-            dissipation[:,2] = - 0.2* dH[2]
-            dissipation[:,3] = -0.07 * dH[3]
-        else:
-            dissipation[:,2] = - 0.2* dH[:,2]
-            dissipation[:,3] = -0.07 * dH[:,3]
-        return dissipation
-
+    def get_dissipation(self):
+        return np.array([[ -0.2, -0.07]])
 
     def sample_trajectory(self,t,u0=None, integrator =  "symplectic midpoint"):
         if u0 is None:

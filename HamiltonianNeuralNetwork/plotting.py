@@ -72,6 +72,7 @@ def plot_PHNN_prediction(model,u_pred,u_exact,t_sample,sys,u0, integrator):
     ax[0].legend()
 
     t = t_sample.squeeze(0)
+    
 
     ax[1].plot(t, H_exact, label="H(u)")
     ax[1].plot(t, H_nn, label=r"$\hat{H}_{\theta}(\hat u)$")

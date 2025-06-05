@@ -47,17 +47,25 @@ class ExternalForceNeuralNetwork(nn.Module):
         self.act_2 = act_2
         self.Fourier = False
         self.fourier_to_scalar = nn.Linear(2, 1)
+        #self.fourier_to_scalar = nn.Sequential(
+        #nn.Linear(2, 10),
+        #nn.Tanh(),  
+        #nn.Linear(10, 1))
         #Initializing weigths and bias Fourier Basis
-        nn.init.xavier_uniform_(self.fourier_to_scalar.weight)
-        nn.init.zeros_(self.fourier_to_scalar.bias)
+        if self.Fourier:
+            nn.init.kaiming_normal_(self.fourier_to_scalar.weight)
+            nn.init.zeros_(self.fourier_to_scalar.bias)
+
+
+
         self.learned_period = None
 
         linear1= nn.Linear(1, hidden_dim)
         linear2 = nn.Linear(hidden_dim, hidden_dim)
         linear3= nn.Linear(hidden_dim, int(self.nstates/2), bias=False)
 
-        #for lin in [linear1, linear2, linear3]:
-            #nn.init.orthogonal_(lin.weight) 
+        for lin in [linear1, linear2, linear3]:
+            nn.init.orthogonal_(lin.weight) 
 
         self.model = nn.Sequential(
             linear1,
@@ -66,7 +74,16 @@ class ExternalForceNeuralNetwork(nn.Module):
             self.act_2,
             linear3,
         )
-   
+    """
+
+    def init_fourier_to_scalar(self):
+        for l in self.fourier_to_scalar:
+            if isinstance(l, nn.Linear):
+                nn.init.kaiming_normal_(l.weight)
+                #nn.init.xavier_uniform_(l.weight)
+                nn.init.zeros_(l.bias)
+
+   """
 
     def forward(self,t=None):
         if self.Fourier:

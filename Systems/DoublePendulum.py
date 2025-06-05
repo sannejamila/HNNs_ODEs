@@ -120,22 +120,23 @@ class DoublePendulumExternalForce(DoublePendulum):
         t = t_start
         dH = self.Hamiltonian_grad(u.T).T
         #print("shape dh in udot: ",dH.shape)
-        #dissipation = np.zeros_like(u)
+     
    
         
-        #if dH.ndim == 1:
-            #dissipation[:,2] = - 0.1* dH[2]
-           # dissipation[:,3] = -0.05 * dH[3]
-       # else:
-          #  dissipation[:,2] = - 0.1* dH[:,2]
-          #  dissipation[:,3] = -0.05 * dH[:,3]
-
+        dissipation = np.zeros_like(u)
+        if dH.ndim ==1:
+      
+            dissipation[:,2] = - 0.1* dH[2]
+            dissipation[:,3] = -0.05 * dH[3]
+        else:
+            dissipation[:,2] = - 0.1* dH[:,2]
+            dissipation[:,3] = -0.05 * dH[:,3]
 
         external_force = np.zeros_like(u)
         #external_force[:,2] = 0.5 * np.cos(0.7 * np.pi * t)
         #external_force[:,3] =  0.2 * np.sin(1.3 * np.pi * t)
 
-        dissipation = self.get_dissipation(u=u,dH=dH)
+        #dissipation = self.get_dissipation(u=u,dH=dH)
 
         F = self.External_force(t)
 
@@ -147,7 +148,7 @@ class DoublePendulumExternalForce(DoublePendulum):
 
         u_dot = dH@self.S.T + dissipation +external_force
         return u_dot
-
+    """
 
     def get_dissipation(self,u,dH=None):
         if dH is None:
@@ -161,8 +162,9 @@ class DoublePendulumExternalForce(DoublePendulum):
             dissipation[:,2] = - 0.1* dH[:,2]
             dissipation[:,3] = -0.05 * dH[:,3]
         return dissipation
-
-
+"""
+    def get_dissipation(self):
+        return np.array([[ -0.1, -0.05]])
 
     def sample_trajectory(self,t,u0=None, integrator =  "symplectic midpoint"):
         if u0 is None:

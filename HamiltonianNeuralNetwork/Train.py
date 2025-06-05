@@ -144,7 +144,7 @@ class Training():
                 }, path)
         return "Model saved"
     
-    def train(self,loss_func, penalty_func=None):
+    def train(self,loss_func, penalty_func=None,scheduler = None):
         trainingdetails={}
         optimizer = self.optimizer
         model = self.model
@@ -171,6 +171,8 @@ class Training():
                     vloss = self.compute_validation_loss(model,val_loader, loss_func,penalty_func)
                     end = datetime.datetime.now()
                     val_loss_list.append(vloss)
+                    if scheduler is not None:
+                        scheduler.step(vloss)
                 trainingdetails["epochs"] = epoch + 1
                 trainingdetails["val_loss"] = vloss
                 trainingdetails["train_loss"] = avg_loss
